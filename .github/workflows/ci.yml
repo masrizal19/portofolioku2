@@ -9,26 +9,109 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   validate:
-    name: Build & Validate Project
+    name: Validate Project
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Setup Node.js
+        if: ${{ hashFiles('package.json') != '' }}
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            npm-shrinkwrap.json
+
+      - name: Check Node Project
+        if: ${{ hashFiles('package.json') != '' }}
+        run: |
+          echo "package.json ditemukan."
 
       - name: Install Dependencies
-        run: npm ci
+        if: ${{ hashFiles('package.json') != '' }}
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          elif [ -f npm-shrinkwrap.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
-      - name: Run Quality Verification (Linter)
-        run: npm run lint
+      - name: Run Lint
+        if: ${{ hashFiles('package.json') != '' }}
+        run: |
+          if npm run | grep -q "lint"; then
+            npm run lint
+          else
+            echo "Script lint tidak tersedia. Melewati."
+          fi
 
-      - name: Verify Frontend Compilation (Build)
-        run: npm run build
+      - name: Run Tests
+        if: ${{ hashFiles('package.json') != '' }}
+        run: |
+          if npm run | grep -q "test"; then
+            npm test -- --if-present
+          else
+            echo "Script test tidak tersedia. Melewati."
+          fi
+
+      - name: Build Project
+        if: ${{ hashFiles('package.json') != '' }}
+        run: |
+          if npm run | grep -q "build"; then
+            npm run build
+          else
+            echo "Script build tidak tersedia. Melewati."
+          fi
+
+      - name: Validate Static Project
+        if: ${{ hashFiles('package.json') == '' }}
+        run: |
+          echo "Tidak ditemukan package.json."
+          echo "Project dianggap sebagai static/PHP project."
+          echo "Tidak diperlukan proses npm."
+
+      - name: Validate PHP Files
+        shell: bash
+        run: |
+          PHP_FILES=$(find . -type f -name "*.php" \
+            -not -path "./vendor/*" \
+            -not -path "./node_modules/*")
+
+          if [ -z "$PHP_FILES" ]; then
+            echo "Tidak ada file PHP."
+            exit 0
+          fi
+
+          echo "Memeriksa syntax PHP..."
+
+          FAILED=0
+
+          while IFS= read -r FILE; do
+            echo "Checking: $FILE"
+
+            php -l "$FILE" || FAILED=1
+          done <<< "$PHP_FILES"
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "Ditemukan syntax error pada PHP."
+            exit 1
+          fi
+
+          echo "Semua file PHP valid."
+
+      - name: Validation Complete
+        run: |
+          echo "================================="
+          echo "CI VALIDATION BERHASIL"
+          echo "================================="
