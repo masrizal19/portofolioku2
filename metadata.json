@@ -1,0 +1,8 @@
+{
+  "name": "Alya Pratama Portfolio",
+  "description": "Portofolio Alya Pratama, desainer visual dan produk untuk mobile dan web.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
